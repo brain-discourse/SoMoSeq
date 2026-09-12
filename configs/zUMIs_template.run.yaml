@@ -1,0 +1,106 @@
+###########################################
+#Welcome to zUMIs (source:https://github.com/sdparekh/zUMIs)
+#below, please fill the mandatory inputs
+#provide full paths for all files
+###########################################
+#Paths below use placeholders from configs/paths.example.yaml (RAW_DATA_DIR, STAR_INDEX,
+#GTF_FILE, OUT_DIR, ZUMIS_INSTALL_DIR), substitute with your own before running.
+#This is a canonical TEMPLATE showing the general structure used for every lane/sample in this project (see sample_sheet.tsv for the list of lanes/samples this was run for)
+#please write to @brain-discourse for exact per-lane/per-sample paths used (which vary based on server setup)
+#this file is meant for understanding/reproducing the workflow
+
+
+#project name — one per lane/sample, see sample_sheet.tsv
+project: <project_id>
+
+#generated from earlier preprocessing steps; combine all inputs into one list obj corresponding to the project with paths and BC ranges.
+#this setup was used for the analysis of the **SoMoSeq** manuscript and has been optimized and validated for (Smartseq-2 chemistry)[https://doi.org/10.1038/nprot.2014.006]
+#see (protocol-specfic setup) [https://github.com/sdparekh/zUMIs/wiki/Protocol-specific-setup] when working with custom chemistries and/or barcodes (will require additional STAR parameter optimization)
+#Barcode range definition needs to account for all ranges. You can give several comma-separated ranges for BC & UMI sequences, eg. BC(1-6,20-26)
+#you can specify between 1 and 4 input files
+sequence_files:
+  file1:
+    name: ${RAW_DATA_DIR}/reads_for_zUMIs_trimmed.re.R1.fastq.gz
+    base_definition:
+      - cDNA(1-101)
+  file2:
+    name: ${RAW_DATA_DIR}/reads_for_zUMIs_trimmed.re.R2.fastq.gz
+    base_definition:
+      - cDNA(1-101)
+  file3:
+    name: ${RAW_DATA_DIR}/reads_for_zUMIs_filtered.index.fastq.gz
+    base_definition:
+      - BC(1-8)
+
+#reference genome setup
+reference:
+  STAR_index: ${STAR_INDEX}
+  GTF_file: ${GTF_FILE}
+  exon_extension: no #extend exons by a certain width?
+  extension_length: 0 #number of bp to extend exons by
+  scaffold_length_min: 0 #minimal scaffold/chromosome length to consider (0 = all)
+  additional_files: null #Optional parameter. It is possible to give additional reference sequences here, eg ERCC.fa
+  additional_STAR_params: "--outReadsUnmapped Fastx --outFilterMismatchNoverLmax 0.04 --outFilterScoreMinOverLread 0.2 --outFilterMatchNminOverLread 0.2 --outFilterMismatchNmax 8 --alignSJoverhangMin 8 --alignSJDBoverhangMin 3 --alignEndsType Local --outFilterIntronMotifs RemoveNoncanonicalUnannotated --limitSjdbInsertNsj 4000000 --limitOutSJcollapsed 4000000 --outSAMstrandField intronMotif --seedSearchStartLmax 30 --alignEndsProtrude 10 ConcordantPair --peOverlapNbasesMin 5 --peOverlapMMp 0.1"
+
+#output directory
+out_dir: ${OUT_DIR}
+
+###########################################
+#below, you may optionally change default parameters
+###########################################
+
+#number of processors to use
+num_threads: 5
+mem_limit: 200
+#memory limit in Gigabytes, null meaning unlimited RAM usage
+
+#barcode & UMI filtering options
+#number of bases under the base quality cutoff that should be filtered out.
+#Phred score base-cutoff for quality control.
+filter_cutoffs:
+  BC_filter:
+    num_bases: 1
+    phred: 20
+  UMI_filter:
+    num_bases: 1
+    phred: 20
+
+#Options for Barcode handling
+#You can give either number of top barcodes to use or give an annotation of cell barcodes.
+#If you leave both barcode_num and barcode_file empty, zUMIs will perform automatic cell barcode selection for you!
+barcodes:
+  barcode_num: null
+  barcode_file: ${RAW_DATA_DIR}/reads_for_zUMIs.expected_barcodes.txt
+  barcode_sharing: null #Optional for combining several barcode sequences per cell (see zUMIs_wiki[https://github.com/sdparekh/zUMIs/wiki/])
+  automatic: no #Give yes/no to this option. If the cell barcodes should be detected automatically. If the barcode file is given in combination with automatic barcode detection, the list of given barcodes will be used as whitelist.
+  BarcodeBinning: 0 #Hamming distance binning of close cell barcode sequences.
+  nReadsperCell: 100 #Keep only the cell barcodes with atleast n number of reads.
+  demultiplex: yes #produce per-cell demultiplexed bam files.
+
+#Options related to counting of reads towards expression profiles
+counting_opts:
+  introns: yes #can be set to no for exon-only counting.
+  intronProb: yes #perform an estimation of how likely intronic reads are to be derived from mRNA by comparing to intergenic counts.
+  downsampling: 0 #Number of reads to downsample to. This value can be a fixed number of reads (e.g. 10000) or a desired range (e.g. 10000-20000) Barcodes with less than <d> will not be reported. 0 means adaptive downsampling. Default: 0.
+  strand: 0 #Is the library stranded? 0 = unstranded, 1 = positively stranded, 2 = negatively stranded
+  Ham_Dist: 0 #Hamming distance collapsing of UMI sequences.
+  velocyto: yes #Would you like velocyto to do counting of intron-exon spanning reads
+  primaryHit: yes #Do you want to count the primary Hits of multimapping reads towards gene expression levels?
+  multi_overlap: no #Do you want to assign reads overlapping to multiple features?
+  fraction_overlap: 0 #minimum required fraction of the read overlapping with the gene for read assignment to genes
+  twoPass: no #perform basic STAR twoPass mapping
+
+#produce stats files and plots?
+make_stats: yes
+
+#Start zUMIs from stage. Possible TEXT(Filtering, Mapping, Counting, Summarising). Default: Filtering.
+which_Stage: Filtering
+
+#define dependencies program paths
+read_layout: PE
+#below, fqfilter will add a read_layout flag defining SE or PE
+samtools_exec: samtools
+pigz_exec: pigz
+STAR_exec: STAR
+Rscript_exec: Rscript
+zUMIs_directory: ${ZUMIS_INSTALL_DIR}

@@ -1,0 +1,6 @@
+sample_id	batch	raw_fastq_dir	zumis_out_dir	notes
+lane1	somo_2024	/path/to/data/lane1	/path/to/output/lane1	384-nuclei pool, NovaSeq S4 lane 1
+lane2	somo_2024	/path/to/data/lane2	/path/to/output/lane2	384-nuclei pool, NovaSeq S4 lane 2
+lane3	somo_2024	/path/to/data/lane3	/path/to/output/lane3	384-nuclei pool, NovaSeq S4 lane 3
+pik	somo_2023	/path/to/data/pik	/path/to/output/pik	second sequencing batch
+slc	somo_2023	/path/to/data/slc	/path/to/output/slc	second sequencing batch
