@@ -1,0 +1,20 @@
+# use this config template and fill in the values for your proj/env
+# preprocessing in this project is done at lane level where each lane corresponds to a 384 nuclei pool run on one lane of NovaseqS4
+
+# parent dir with lane/sample specific input fastqs and/or intermediate files
+RAW_DATA_DIR: /path/to/data/<lane_or_sample_id>
+
+# STAR genome index (built ahead of time; see zUMIs_wiki: https://github.com/sdparekh/zUMIs/wiki/Usage#preparing-star-index-for-mapping for instructions)
+STAR_INDEX: /path/to/STAR_index_GRCh38_gencode_v32
+
+# GTF annotation (same as the one used to build STAR index)
+GTF_FILE: /path/to/gencode.v32.primary_assembly.annotation.gtf
+
+# Output directory
+OUT_DIR: /path/to/output/<lane_id>
+
+# Local zUMIs env (https://github.com/sdparekh/zUMIs).
+ZUMIS_INSTALL_DIR: /path/to/zUMIs
+
+# R library path used by zUMIs env
+R_LIBS_USER: /path/to/R/library
