@@ -24,7 +24,7 @@ run once per sample / lane/sample pool (see `sample_sheet.tsv`):
 3. **`scripts/03_filter_index.pl`**
    - filters the barcode index fastq file (from `scripts/01_merge_fastq.sh` ) to only keep pairs that survived targeted adapter-trimming, preserving read order
 4. **`scripts/04_run_zumis.sh`**
-   - runs [zUMIs](https://github.com/sdparekh/zUMIs)(version 2.9.7e) which performs the following against a per-lane/sample config (see `configs/zUMIs_template.run.yaml`):
+   - runs [zUMIs](https://github.com/sdparekh/zUMIs)(version 2.9.7e) which performs the following against a per-lane/sample config (see `config/zUMIs_template.run.yaml`):
      4.1. _BC filtering_ - uses Phred 20 - cells with fewer than 100 reads are dropped
      4.2. _STAR alignment_ - aligns against a GRCh38/GENCODE v32 STAR index
      4.3. _feature counting_ - includes both exonic and intronic reads - primary hits retained only for multimappers
@@ -33,7 +33,7 @@ Each step's script applies identical logic across all lanes/samples by directory
 
 ## Configuration
 
-- Copy `configs/paths.example.yaml`, fill in the values for your environment, and substitute them into `configs/zUMIs_template.run.yaml` and the `scripts/*.sh` calls before running.
+- Copy `config/paths.example.yaml`, fill in the values for your environment, and substitute them into `config/zUMIs_template.run.yaml` and the `scripts/*.sh` calls before running.
 - See the header comments in each script/config for expected inputs and outputs.
 - write to @brain-discourse for exact per-lane/sample parameter values actually used for this project (implemented on UNC's longleaf cluster via slurm workflow manager)
 
@@ -82,7 +82,7 @@ Each notebook checks the final output against the deposited files. Notebooks 04â
 
 1.  Download and extract the Zenodo folders. The notebooks expect the `SoMoSeq/` dir, which contains `RDS/`, `metadata/` and `results/`.
 2.  Download the gene sets (below).
-3.  Copy `config/example_paths.yml` to `config/paths.yml` and edit the paths. Relative paths are resolved from `config/`.
+3.  To resolve relative paths edit the `config/paths.example.yaml` 
 4.  Render the notebooks from `notebooks/`, for example `rmarkdown::render("01_QC_preprocessing.Rmd")`.
 
 ### Input data structure
