@@ -1,0 +1,143 @@
+---
+title: "02 Normalization, feature selection and clustering"
+output: html_document
+---
+This notebook performs:
+  - Library-size log normalization,
+  - selection of highly variable genes (HVGs) with batch blocking, 
+  - HVG principal components, and 
+  - graph-based clustering
+
+Data are not integrated or batch-corrected. Sequencing batch is used only as a blocking factor when modelling gene variance.
+
+```{r setup, message = FALSE}
+suppressPackageStartupMessages({
+  library(SingleCellExperiment)
+  library(scuttle)
+  library(scran)
+  library(scater)
+  library(igraph)
+})
+source(file.path("..", "R", "helpers.R"))
+paths <- load_paths()
+```
+
+## Parameters
+
+```{r parameters}
+n_hvg          <- 2000
+hvg_pca_dims   <- 13  
+block_field    <- "Seq_batch"
+mito_pattern   <- "^MT-"
+ribo_pattern   <- "^RP[SL]"
+snn_k          <- 20
+leiden_res     <- c(1.0, 0.8)
+leiden_seed    <- 1
+
+# Sex-chromosome genes are taken from Ensembl BioMart (release 116 archive)
+biomart_host    <- "https://jun2026.archive.ensembl.org"
+biomart_dataset <- "hsapiens_gene_ensembl"
+sex_chromosomes <- c("X", "Y", "chrX", "chrY", "CHR_X", "CHR_Y", "chr_X", "chr_Y")
+```
+
+```{r load}
+sce <- readRDS(file.path(paths$work_dir, "01_qc_filtered.rds"))
+dim(sce)
+```
+
+## Normalization
+
+`logcounts = log2(counts / size factor + 1)`, using library-size factors (`size.factors = NULL`).
+
+```{r normalize}
+sce <- scuttle::logNormCounts(sce, transform = "log", size.factors = NULL,
+                              name = "logcounts")
+summary(sizeFactors(sce))
+```
+
+## Highly variable genes
+
+Gene variance is modelled with sequencing batch as a blocking factor. 
+Mitochondrial, ribosomal and sex-chromosome genes are excluded from the HVG selection
+
+```{r sex-genes}
+query <- paste0(
+  '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE Query>',
+  '<Query virtualSchemaName="default" formatter="TSV" header="1" uniqueRows="1" ',
+  'count="" datasetConfigVersion="0.6">',
+  '<Dataset name="', biomart_dataset, '" interface="default">',
+  '<Attribute name="external_gene_name"/><Attribute name="chromosome_name"/>',
+  '</Dataset></Query>')
+bm <- utils::read.delim(
+  paste0(biomart_host, "/biomart/martservice?query=",
+         utils::URLencode(query, reserved = TRUE)),
+  header = TRUE, stringsAsFactors = FALSE, check.names = FALSE)
+names(bm) <- c("external_gene_name", "chromosome_name")
+sexchr_genes <- unique(bm$external_gene_name[bm$chromosome_name %in% sex_chromosomes])
+
+is_sex  <- as.character(rowData(sce)$symbol) %in% sexchr_genes
+is_mito <- grepl(mito_pattern, rownames(sce))
+is_ribo <- grepl(ribo_pattern, rownames(sce))
+c(sex = sum(is_sex), mito = sum(is_mito), ribo = sum(is_ribo))
+
+save_tsv(data.frame(gene_id = rownames(sce), is_sex = is_sex),
+         file.path(paths$work_dir, "02_sex_chromosome_flags.tsv"))
+```
+
+```{r hvg}
+dec <- scran::modelGeneVar(sce, assay.type = "logcounts",
+                           block = as.character(sce[[block_field]]))
+dec_df <- as.data.frame(dec, stringsAsFactors = FALSE, check.names = FALSE)
+stopifnot(identical(rownames(dec_df), rownames(sce)))
+
+eligible <- !(is_mito | is_ribo | is_sex) & is.finite(dec_df$bio) & is.finite(dec_df$total)
+hvgs <- as.character(scran::getTopHVGs(dec_df[eligible, , drop = FALSE], n = n_hvg))
+stopifnot(length(hvgs) == n_hvg)
+```
+
+## Dimensionality reduction
+
+PCA is performed on the scaled logcounts of the 2,000 HVGs with  `calculatePCA` using the default solver (randomized IRLBA). 
+
+```{r pca}
+set.seed(1)
+hvg_pca <- scater::calculatePCA(sce, subset_row = hvgs, ncomponents = hvg_pca_dims,
+                                exprs_values = "logcounts", scale = TRUE)
+hvg_pca <- as.matrix(hvg_pca)[colnames(sce), , drop = FALSE]
+colnames(hvg_pca) <- paste0("PC", seq_len(hvg_pca_dims))
+reducedDim(sce, "hvg_pca") <- hvg_pca
+```
+
+## Clustering
+
+Shared-nearest-neighbour graph is constructed on the HVG PCs, followed by Leiden clustering.
+
+```{r cluster}
+graph <- scran::buildSNNGraph(t(hvg_pca), k = snn_k)
+for (r in leiden_res) {
+  set.seed(leiden_seed)
+  field <- paste0("cluster_hvg_res", sub("\\.0$", "", format(r)))
+  colData(sce)[[field]] <- as.character(
+    igraph::cluster_leiden(graph, resolution_parameter = r)$membership)
+}
+table(sce$cluster_hvg_res1)
+```
+
+## Verify against the deposited object
+
+In the deposited object, `cluster_hvg_res1` is stored as `final_cluster`.
+
+```{r verify}
+ann <- readRDS(file.path(paths$zenodo_root, "RDS", "filtered_annotated_object.rds"))
+stopifnot(
+  isTRUE(all.equal(assay(sce, "logcounts"), assay(ann, "logcounts"), check.attributes = FALSE)),
+  max(abs(abs(reducedDim(sce, "hvg_pca")) - abs(reducedDim(ann, "hvg_pca")))) < 1e-2,
+  identical(sce$cluster_hvg_res1, as.character(ann$final_cluster)),
+  identical(sce$cluster_hvg_res0.8, as.character(ann$cluster_hvg_res0.8)))
+rm(ann)
+```
+
+```{r save}
+saveRDS(sce, file.path(paths$work_dir, "02_clustered.rds"))
+sessionInfo()
+```

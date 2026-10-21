@@ -1,0 +1,139 @@
+---
+title: "06 Pathway enrichment (Chapter 3)"
+output: html_document
+---
+
+Each fitted contrast is tested by preranked gene-set enrichment (fgsea), ranking genes by the limma moderated t-statistic.
+
+The gene-set lib is built from:
+
+- two curated PI3K–mTOR sets defined below;
+- Hallmark, 
+- KEGG mTOR/insulin/neurotrophin, 
+- Reactome mTOR and 
+- HPO epilepsy/cortical sets in MSigDB v2024.1;
+- a separate HPO epilepsy and cortical-malformation GMT.
+
+For `HP_CORTICAL_DYSPLASIA` and `HP_FOCAL_CORTICAL_DYSPLASIA`, the version in
+the separate GMT replaces the MSigDB version. Download links are included in README.
+
+```{r setup, message = FALSE}
+suppressPackageStartupMessages(library(fgsea))
+source(file.path("..", "R", "helpers.R"))
+paths <- load_paths()
+```
+
+## Parameters
+
+```{r parameters}
+collection_patterns <- list(
+  hallmark = "^HALLMARK_",
+  kegg = "^KEGG_MTOR_SIGNALING|^KEGG_INSULIN_SIGNALING|^KEGG_NEUROTROPHIN",
+  reactome = "MTOR",
+  hpo = "^HP_.*EPILEPSY|^HP_.*CORTICAL")
+prefer_newer_hpo <- c("HP_CORTICAL_DYSPLASIA", "HP_FOCAL_CORTICAL_DYSPLASIA")
+
+fgsea_seed <- 12345L
+min_size <- 15L
+max_size <- 500L
+min_ranked_genes <- 100L
+fdr_threshold <- 0.05
+```
+
+## Gene sets
+
+```{r gene-sets}
+
+gene_sets <- list(
+  PIK3CA_PROXIMAL_CASCADE = c(
+    "PIK3CA", "PIK3CB", "PIK3CD", "PIK3CG", "PIK3R1", "PIK3R2", "PIK3R3", "PTEN", "PDPK1",
+    "AKT1", "AKT2", "AKT3", "TSC1", "TSC2", "RHEB", "MTOR", "RPTOR", "MLST8", "AKT1S1",
+    "RPS6KB1", "RPS6KB2", "EIF4EBP1"),
+
+  NEURON_MTOR_RAPAMYCIN_RESP = c(
+    "EEF1A1", "EEF1A2", "EEF2", "EIF4A1", "EIF4B", "EIF4E", "RPS6", "RPS6KB1", "RPS6KB2",
+    "RPTOR", "NPM1", "NOP56", "NOP58", "FBL", "DKC1", "ARC", "CAMK2A", "GRIA1", "BDNF",
+    "MAP1B", "ULK1", "ATG13", "RB1CC1", "BECN1", "MYC", "CCND1", "CDK4", "LDHA", "PKM",
+    "HK2", "SLC2A1", "DDIT4", "SESN1", "SESN2"))
+
+gmt_files <- list.files(paths$msigdb_dir, pattern = "\\.symbols\\.gmt$", full.names = TRUE)
+
+for (f in gmt_files) {
+  g <- fgsea::gmtPathways(f)
+  keep <- unique(unlist(lapply(collection_patterns, grep, x = names(g), value = TRUE, ignore.case = TRUE), use.names = FALSE))
+  gene_sets <- c(gene_sets, g[setdiff(keep, prefer_newer_hpo)])
+}
+
+epi <- fgsea::gmtPathways(paths$epilepsy_gmt)
+epi <- lapply(epi, function(x) x[!grepl("^http", x)])
+gene_sets <- c(gene_sets, epi[lengths(epi) > 0L])
+
+# Retain the first copy of any duplicate gene set names
+
+dup_names <- unique(names(gene_sets)[duplicated(names(gene_sets))])
+keep <- rep(TRUE, length(gene_sets))
+for (nm in dup_names) {
+  idx <- which(names(gene_sets) == nm)
+  for (i in seq_along(idx)) {
+    if (!keep[idx[i]] || i == length(idx)) next
+    for (j in idx[(i + 1L):length(idx)])
+      if (keep[j] && setequal(unique(gene_sets[[idx[i]]]), unique(gene_sets[[j]]))) keep[j] <- FALSE
+  }
+}
+
+gene_sets <- gene_sets[keep]
+length(gene_sets)
+```
+
+## fgsea per contrast
+
+```{r fgsea}
+
+de_dir  <- file.path(paths$work_dir, "05_differential_expression")
+
+out_dir <- file.path(paths$work_dir, "06_pathways")
+
+for (f in list.files(de_dir, pattern = "_toptable\\.tsv$", recursive = TRUE, full.names = TRUE)) {
+  cell_type   <- basename(dirname(f))
+  contrast_id <- sub("_toptable\\.tsv$", "", basename(f))
+  de <- utils::read.delim(f, stringsAsFactors = FALSE, check.names = FALSE)
+
+  stat <- setNames(de$t, de$gene_id)
+  ranks <- sort(stat[is.finite(stat)], decreasing = TRUE)
+  if (length(ranks) < min_ranked_genes) next
+
+  set.seed(fgsea_seed)
+
+  fg <- as.data.frame(fgsea::fgsea(pathways = gene_sets, stats = ranks, minSize = min_size,
+                                   maxSize = max_size, eps = 0, nproc = 1L))
+  fg$cell_type <- cell_type; fg$contrast_id <- contrast_id
+  fg$padj_significant <- is.finite(fg$padj) & fg$padj < fdr_threshold
+
+  leading_edge <- data.frame(cell_type = cell_type, contrast_id = contrast_id,
+                             pathway_id = fg$pathway, NES = fg$NES, padj = fg$padj,
+                             leading_edge_genes = vapply(fg$leadingEdge, paste, "", collapse = ";"),
+                             gene_membership_count = lengths(fg$leadingEdge))
+
+  fg$leadingEdge <- vapply(fg$leadingEdge, paste, "", collapse = ";")
+
+  tag <- paste0(cell_type, "__", contrast_id)
+  save_tsv(fg, file.path(out_dir, paste0("fgsea_", tag, ".tsv")))
+  save_tsv(leading_edge, file.path(out_dir, paste0("leading_edge_", tag, ".tsv")))
+}
+```
+
+## Check against uploaded results
+
+```{r verify}
+dep_dir <- file.path(paths$zenodo_root, "results", "pathways")
+
+for (f in list.files(out_dir, "^fgsea_.*\\.tsv$")) {
+  a <- read.delim(file.path(out_dir, f)); b <- read.delim(file.path(dep_dir, f))
+  stopifnot(identical(a$pathway, b$pathway),
+            isTRUE(all.equal(a$NES, b$NES, tolerance = 1e-8)),
+            isTRUE(all.equal(a$padj, b$padj, tolerance = 1e-8)),
+            identical(a$leadingEdge, b$leadingEdge))
+}
+
+sessionInfo()
+```
