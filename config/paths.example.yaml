@@ -22,7 +22,7 @@ R_LIBS_USER: /path/to/R/library
 
 # --------------------- snRNA-seq DATA ANAYLSIS ----------------------------------------
 # Paths are relative and load files from the [Zenodo deposit](https://doi.org/10.5281/zenodo.23488443)
-zenodo_root: "/path/to/data/SoMoSeq_Version v2_2026_10_19"
+zenodo_root: "/path/to/data/SoMoSeq_v2_2026_10_19"
 
 # Working directory
 work_dir: "/path/to/work"
