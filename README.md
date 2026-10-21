@@ -56,3 +56,99 @@ Each step's script applies identical logic across all lanes/samples by directory
 - Created two files with mapping of Gene/Transript ID's to gene names
   `awk -F '\t|\"' '($3 ~ /transcript/){print $12,$16}' gencode.v32.primary_assembly.annotation.gtf > Ens_transcript_ID_to_Gene_Name`
   `awk -F '\t|\"' '($3 ~ /gene/){print $10,$14}' gencode.v32.primary_assembly.annotation.gtf > Ens_Gene_ID_to_Gene_Name`
+
+## SoMoSeq single-nucleus RNA-seq analysis
+
+-   R Markdown notebooks for the analysis of the SoMoSeq dataset (PIK3CA- and SLC35A2-related focal MCD cases and neurotypical autopsy controls).
+
+-   These notebooks use the zUMIs derived gene expression matrix (intron+exon counts), from the generated FASTQ-to-count preprocessing workflow (`../scripts/` dir) and the sample- and cell-level metadata deposited on Zenodo.
+
+-   Data: [Zenodo record](https://zenodo.org/records/22693814)
+
+## Notebooks
+
+| Notebook | Step | Writes (`work/`; deposited object/file name) |
+|------------------|-----------------------|-------------------------------|
+| `01_QC_preprocessing.Rmd` | Sample annotations, sample selection, nucleus QC thresholds, gene filters | ``` 01_qc_filtered.rds;``RDS/filtered_annotated_object.rds ``` (counts) |
+| `02_normalization_clustering.Rmd` | Library-size log normalization, batch-blocked HVGs, HVG PCA, SNN/Leiden clustering | `02_clustered.rds`, ``` 02_sex_chromosome_flags.tsv;``normalized_expression/ ```, `hvg_pca` in the RDS |
+| `03_celltype_annotation.Rmd` | Marker-contrast scoring and gated assignment | `03_annotated.rds`, ``` 03_annotation_per_cell.tsv;``metadata/final_cell_type_annotations.tsv.gz ``` |
+| `04_annotation_validation.Rmd` | Coverage, marker enrichment, held-out panel, score–depth associations, SingleR agreement | ``` 04_annotation_validation/;``metadata/reference_annotations/ ``` |
+| `05_pseudobulk_DE.Rmd` | Donor x batch x genotype x cell-type pseudobulk, limma-voom | ``` 05_differential_expression/;``results/pseudobulk/ ```, `results/differential_expression/` |
+| `06_pathway_analysis.Rmd` | fgsea on moderated t ranks | ``` 06_pathways/;``results/pathways/ ``` |
+
+Each notebook checks the final output against the deposited files. Notebooks 04–06 can also use the deposited annotated object as a starting point.
+
+## Setup
+
+1.  Download and extract the Zenodo folders. The notebooks expect the `SoMoSeq/` dir, which contains `RDS/`, `metadata/` and `results/`.
+2.  Download the gene sets (below).
+3.  Copy `config/example_paths.yml` to `config/paths.yml` and edit the paths. Relative paths are resolved from `config/`.
+4.  Render the notebooks from `notebooks/`, for example `rmarkdown::render("01_QC_preprocessing.Rmd")`.
+
+### Input data structure
+
+-   `RDS/raw_unfiltered_object.rds`: a `SingleCellExperiment` of 44,716 genes x 1,116 nuclei, with raw `counts`.
+    -   rowData: `symbol`, `gene_biotype`, `ensembl_id`.
+    -   colData used by notebook 01: `cell_id`, `Sample_name`, `Seq_batch`, `Genotype`, `Case_control`, `Bulk_sc`, `Parent_cDNA_plate_ID`, `is_duplicate_group_member`, `spliced_counts`, `total_counts`.
+
+### Gene sets
+
+-   [MSigDB v2024.1 (human, gene symbols)](https://data.broadinstitute.org/gsea-msigdb/msigdb/release/2024.1.Hs/)
+
+| File                            | Sets used |
+|---------------------------------|-----------|
+| `h.all.v2024.1.Hs.symbols.gmt`  | 50        |
+| `c2.cp.v2024.1.Hs.symbols.gmt`  | 18        |
+| `c5.hpo.v2024.1.Hs.symbols.gmt` | 24        |
+| `c6.all.v2024.1.Hs.symbols.gmt` | 6         |
+
+-   Epilepsy / cortical-malformation HPO sets (`epilepsy_gmt`; 13 sets).
+    -   The HPO sets come from the [MSigDB gene-set pages](https://www.gsea-msigdb.org/gsea/msigdb/human/geneset/%3CNAME%3E):
+        -   `HP_ABNORMAL_CEREBRAL_CORTEX_MORPHOLOGY`
+        -   `HP_ABNORMAL_CEREBRAL_VASCULAR_MORPHOLOGY`
+        -   `HP_CEREBRAL_CAVERNOUS_MALFORMATION`
+        -   `HP_CORTICAL_DYSPLASIA`
+        -   `HP_EEG_WITH_FOCAL_EPILEPTIFORM_DISCHARGES`
+        -   `HP_EPILEPTIC_ENCEPHALOPATHY`
+        -   `HP_FOCAL_CORTICAL_DYSPLASIA_TYPE_II`
+        -   `HP_FOCAL_CORTICAL_DYSPLASIA`
+        -   `HP_HEMIMEGALENCEPHALY`
+        -   `HP_MEGALENCEPHALY`
+        -   `HP_MULTIFOCAL_EPILEPTIFORM_DISCHARGES`.
+-   The file also contains two sets from [Enrichr libraries](https://maayanlab.cloud/Enrichr/#libraries):
+    -   "Proteins Involved in Epilepsy", from the `Elsevier_Pathway_Collection` library;
+    -   "Cortical Dysplasia With Other Brain Malformations", from the `GeDiPNet_2023` library.
+
+### SingleR references
+
+-   This notebook uses the deposited SingleR predictions
+
+-   To rerun SingleR, set `run_singler: true` in notebook 04 and point `config/paths.yml` to reference objects built from:
+
+-   siletti:
+
+    -   Siletti et al. (2023), "Transcriptomic diversity of cell types across the adult human brain", *Science*, <https://doi.org/10.1126/science.add7046>
+    -   Cell type col = `cluster_annotation`.
+
+-   developmental:
+
+    -   Zhu et al. (2023), "Multi-omic profiling of the developing human cerebral cortex at the single-cell level", *Science Advances*, <https://doi.org/10.1126/sciadv.adg3754>
+    -   10x multiome (RNA + ATAC) from 12 donors, two at each of six ages: 18–19 GW, 23–24 GW, 0 y, 4–6 y, 14 y and 20–39 y
+    -   Cell type col = `cluster_annotation`.
+
+-   ss2:
+
+    -   Allen Institute human MTG Smart-seq2 (Hodge et al. 2019, *Nature*)
+    -   Cell type col = `subclass_label`.
+
+## Software versions
+
+-   R 4.5.2
+-   scuttle 1.20.0
+-   scran 1.38.0
+-   scater 1.38.0
+-   igraph 2.2.1
+-   edgeR 4.8.2
+-   limma 3.66.0
+-   fgsea 1.39.4
+-   SingleR 2.10.0
