@@ -3,7 +3,7 @@
 #below, please fill the mandatory inputs
 #provide full paths for all files
 ###########################################
-#Paths below use placeholders from configs/paths.example.yaml (RAW_DATA_DIR, STAR_INDEX,
+#Paths below use placeholders from config/paths.example.yaml (RAW_DATA_DIR, STAR_INDEX,
 #GTF_FILE, OUT_DIR, ZUMIS_INSTALL_DIR), substitute with your own before running.
 #This is a canonical TEMPLATE showing the general structure used for every lane/sample in this project (see sample_sheet.tsv for the list of lanes/samples this was run for)
 #please write to @brain-discourse for exact per-lane/per-sample paths used (which vary based on server setup)
