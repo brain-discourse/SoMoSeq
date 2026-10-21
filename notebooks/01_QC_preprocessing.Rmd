@@ -15,7 +15,7 @@ suppressPackageStartupMessages({
   library(scuttle)
   library(Matrix)
 })
-source(file.path("..", "R", "helpers.R"))
+source(file.path("..", "scripts", "helpers.R"))
 paths <- load_paths()
 dir.create(paths$work_dir, showWarnings = FALSE, recursive = TRUE)
 ```
