@@ -19,7 +19,7 @@ the separate GMT replaces the MSigDB version. Download links are included in REA
 
 ```{r setup, message = FALSE}
 suppressPackageStartupMessages(library(fgsea))
-source(file.path("..", "R", "helpers.R"))
+source(file.path("..", "scripts", "helpers.R"))
 paths <- load_paths()
 ```
 
