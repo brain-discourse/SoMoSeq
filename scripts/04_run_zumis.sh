@@ -7,7 +7,7 @@
 #SBATCH --mem=400G
 
 # usage: sbatch 04_run_zumis.sh <path-to-zUMIs-yaml>
-# Runs zUMIs against the given config (see configs/zUMIs_template.run.yaml and paths.example.yaml). 
+# Runs zUMIs against the given config (see config/zUMIs_template.run.yaml and paths.example.yaml). 
 # Requires ZUMIS_INSTALL_DIR and R_LIBS_USER to be set for your environment.
 
 ZUMIS_YAML=$1
