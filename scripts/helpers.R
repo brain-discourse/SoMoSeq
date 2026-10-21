@@ -2,11 +2,11 @@
 
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0L) b else a
 
-# Read config/paths.yml
+# Read config/paths.example.yaml
 
 load_paths <- function(config_dir = file.path("..", "config")) {
-  f <- file.path(config_dir, "paths.yml")
-  if (!file.exists(f)) f <- file.path(config_dir, "example_paths.yml")
+  f <- file.path(config_dir, "paths.example.yaml")
+  if (!file.exists(f)) f <- file.path(config_dir, "paths_example.yaml")
   p <- yaml::read_yaml(f)
   base <- normalizePath(config_dir)
   lapply(p, function(x) {
